@@ -11,6 +11,7 @@ let DOUBLE_XP = false;
 const minLevelExp = 15;
 const multiply = 1.9;
 
+
 function isExp(exp) {
 	let numExp = Number(exp);
 	if (isNaN(exp)) return "Must be a number.";
@@ -60,6 +61,8 @@ function addExp(user, room, amount) {
 		let oldLevel = WL.level(user.userid);
 		EXP.writeExp(user.userid, amount, newTotal => {
 			let level = WL.level(user.userid);
+			if (Db.explvl.get(user).includes(level)) return false;
+			else Db.explvl.set(Db.explvl.get(user).push(level));
 			if (oldLevel < level) {
 				let reward = '';
 				switch (level) {
@@ -123,7 +126,12 @@ WL.addExp = addExp;
 function level(userid) {
 	userid = toId(userid);
 	let curExp = Db.exp.get(userid, 0);
-	return Math.floor(Math.pow(curExp / minLevelExp, 1 / multiply) + 1);
+	let lvl = Math.floor(Math.pow(curExp / minLevelExp, 1 / multiply) + 1)
+	if (lvl === 1) {
+		Db.explvl.set(userid, []);
+		Db.explvl.set(Db.explvl.get(userid).push(lvl));
+	}
+	return lvl;
 }
 WL.level = level;
 
@@ -234,4 +242,20 @@ exports.commands = {
 		keys.sort(function (a, b) { return b.exp - a.exp; });
 		this.sendReplyBox(rankLadder('Exp Ladder', "EXP", keys.slice(0, target), 'exp') + '</div>');
 	},
+	
+	exptransfer: 'xptransfer',
+	xptransfer: function (target, room, user) {
+		if (!target) this.errorReply('/xptransfer [target], [amount]');
+		let split = target.split(', ');
+		let name = split[0];
+		let num = split[1];
+		let exp = Db.exp.get(user, 0);
+		let nexp = Db.exp.get(name, 0);
+		if (exp < num) return this.errorReply('You do not have that much money.');
+		if (name.length >= 19) return this.sendReply("Usernames are required to be less than 19 characters long.");
+		if (!Users.get(name)) return this.errorReply("The target user could not be found");
+		Db.exp.set(user, -num);
+		Db.exp.set(name, nexp + num);
+		this.sendReply(`You have transferred ${num} exp to ${WL.nameColor(name, false)}.`)
+	}
 };
